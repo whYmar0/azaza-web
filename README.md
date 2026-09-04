@@ -64,5 +64,5 @@ python manage.py runserver
 |---|---|
 | Ташлигов Ахмед | Стартер проекта, `sudoku_service/`, `requirements.txt`, `.env.example`, `web/api.py`, `tests/test_api.py	` |
 | Умаров Зелим | `docs/fat_review.md`, `docs/ADR-001.md`, `web/forms.py` |
-| Альсиев Идрис | `docs/ER.png`, `web/models.py`, `web/migrations/`, `docs/ADR-002.md` |
-| Байраев Магомед-Эми | `core/schemas.py` , `core/solver.py`, `core/tests/`, `web/services.py` |
+| Альсиев Идрис | `docs/ER.png`, `web/models.py`, `web/migrations/`, `web/services.py` |
+| Байраев Магомед-Эми | `core/schemas.py` , `core/solver.py`, `core/tests/`, `docs/ADR-002.md` |
