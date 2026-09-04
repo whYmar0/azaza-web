@@ -1,48 +1,55 @@
-# Sudoku Generator & Solver
+# Sudoku Service
 
-Веб-сервис-генератор судоку с гарантией единственного решения: пользователь
-выбирает уровень сложности, а программа не просто заполняет сетку по
-правилам, но и проверяет, что после удаления клеток у головоломки остаётся
-ровно одно решение — не ноль и не несколько. Дополнительно сервис умеет
-решать и проверять произвольные чужие сетки судоку.
+Веб-сервис-генератор судоку с гарантией единственного решения. Формат сетки
+— строка из 81 символа (`1`-`9` и `.` для пустой клетки). Один контракт на
+два входа: страница (для человека) и `/api/tasks` (для программы).
 
 ## Идея
 
-Составление судоку — это, по сути, решение пустой сетки по правилам (в
-каждой строке, столбце и блоке 3×3 — цифры 1–9 без повторов). Тяжёлая часть
-— не сама генерация, а перебор, проверяющий, что после удаления клеток
-решение остаётся единственным. Для hard-уровня, где подсказок минимум, этот
-перебор считает секунды, а не миллисекунды, поэтому генерация выполняется
-асинхронно. Найти решение можно двумя способами:
-
-- **оптимизированный backtracking** — минимальное время выполнения;
-- **итеративный (anytime) алгоритм** — решение становится лучше с каждой
-  итерацией, пока не станет верным, с live-прогрессом.
-
-Подробнее — в [`docs/idea.md`](docs/idea.md).
+Подробно, с обоснованием архитектуры («рамка») — в `docs/idea.md`.
 
 ## API
 
-| Метод | Путь                          | Код ответа   | Описание |
-|-------|-------------------------------|--------------|----------|
-| POST  | `/api/sudoku/generate`        | `202`        | Запустить генерацию головоломки в фоне |
-| GET   | `/api/tasks/{task_id}`        | `200`/`404`  | Статус фоновой задачи |
-| GET   | `/api/tasks/{task_id}/result` | `200`/`404`  | Готовая головоломка и решение |
-| POST  | `/api/sudoku/solve`           | `200`/`400`  | Решить произвольную сетку |
-| POST  | `/api/sudoku/validate`        | `200`/`400`  | Проверить сетку на конфликты |
-
-Полное описание — в [`docs/api.md`](docs/api.md).
-
-## Стек
-
-Python 3.14, Django 5.x, Django Ninja, pydantic, pytest, ruff.
+`POST /api/tasks` — `{"name": "...", "params": {"mode": "solve"|"generate", "grid": "...", "difficulty": "...", "seed": ...}}` → `202` + `{"id": ...}`.
+`GET /api/tasks/{id}` — статус (`queued`/`running`/`done`/`error`).
+`GET /api/tasks/{id}/result` — результат, когда `status == done`.
+Полная документация с примерами запросов — `docs/api.md`; интерактивно —
+`/api/docs` (Swagger, автогенерация Django Ninja).
 
 ## Структура проекта
 
-- `core/` — логика судоку (генерация, решение, проверка). Не импортирует
-  Django, не ходит в БД и HTTP.
-- `web/services.py` — единственная точка входа для views и API в `core/`.
-- `docs/` — документация идеи и API.
+- `core/` — вычислительное ядро. Не импортирует Django, не ходит в БД и HTTP.
+  - `core/solver.py` — решатель (backtracking + MRV).
+  - `core/schemas.py` — `SudokuParams`: pydantic-валидация входа ДО расчёта
+    (длина, допустимые символы, паттерны mode/difficulty, отсутствие дублей
+    в строках/столбцах/блоках).
+  - `core/tests/` — 8 тестов на чистую логику (эталоны + схема).
+- `web/` — Django-слой:
+  - `web/models.py` — `Task` (заявка, с полями `name`/`kind`/`status`/`params`/`error`), `PuzzleResult`.
+  - `web/services.py` — единственная точка входа для views/API в `core/`; фон — поток, статус пишет прямо в `Task.status`.
+  - `web/api.py` — тонкий Django Ninja роутер, почти не меняется.
+  - `web/forms.py` — форма с теми же именами полей, что в `core/schemas.py`.
+  - `web/views.py`, `web/templates/` — страница с формой.
+- `tests/test_api.py` — тест уровня API (нужен Django, поэтому отдельно от `core/tests/`).
+- `docs/` — идея (`idea.md`), API-контракт (`api.md`), ER-схема
+  (`ER.png`), архитектурные решения (`ADR-001.md`, `ADR-002.md`),
+  самопроверка архитектуры (`fat_review.md`).
+
+## Запуск с чистой машины
+
+```bash
+git clone <url> sudoku-service && cd sudoku-service
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+Тесты: `pytest`. Админка: `http://127.0.0.1:8000/admin/`. API-документация:
+`http://127.0.0.1:8000/api/docs`.
 
 ## Архитектурные принципы
 
@@ -51,8 +58,11 @@ Python 3.14, Django 5.x, Django Ninja, pydantic, pytest, ruff.
 3. Вход валидируется pydantic-схемой до расчёта. Никакого `eval`.
 4. Секреты — только в `.env`.
 
-## Команда
-1. Умаров Зелимхан (whYmar0)
-2. Ташлигов Ахмед (95Wukong95)
-3. Байраев Магомед-Эми (Tawakkul077)
-4. Альсиев Идрис (Neviz95)
+## Вклад
+
+| Участник | Что сделал |
+|---|---|
+| Ташлигов Ахмед | Стартер проекта, `sudoku_service/`, `requirements.txt`, `.env.example`, `web/api.py`, `tests/test_api.py	` |
+| Умаров Зелим | `docs/fat_review.md`, `docs/ADR-001.md`, `web/forms.py` |
+| Альсиев Идрис | `docs/ER.png`, `web/models.py`, `web/migrations/`, `docs/ADR-002.md` |
+| Байраев Магомед-Эми | `core/schemas.py` , `core/solver.py`, `core/tests/`, `web/services.py` |

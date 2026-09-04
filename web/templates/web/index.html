@@ -10,10 +10,12 @@
 <body>
   <h1>{{ project_name }}</h1>
 
+  <p>Те же поля, что принимает API (<a href="/api/docs">/api/docs</a>).
+    Форма пока не отправляет запрос — расчёт через сайт подключим отдельным
+    шагом. Сейчас это демонстрация, что имена полей формы и схемы совпадают.</p>
 
   <form>
-    <label for="param">Параметр задачи (заглушка)</label>
-    <input type="text" id="param" name="param">
+    {{ form.as_p }}
     <button type="submit">Отправить</button>
   </form>
 </body>
