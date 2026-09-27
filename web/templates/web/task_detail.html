@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }} — задача #{{ task.id }}</title>
+  {% if task.status == "queued" or task.status == "running" %}
+  <!-- Расчёт идёт в фоне (threading, см. ADR-002); страница сама
+       перезагрузится через секунду, пока задача не завершится. -->
+  <meta http-equiv="refresh" content="1">
+  {% endif %}
+</head>
+
+<body>
+  <h1>{{ project_name }}</h1>
+  <p><a href="{% url 'index' %}">&larr; новая задача</a></p>
+
+  <h2>Задача #{{ task.id }} — {{ task.name }}</h2>
+  <p>Статус: <strong>{{ task.get_status_display }}</strong></p>
+
+  {% if task.status == "error" %}
+  <p style="color: darkred;">Ошибка: {{ task.error }}</p>
+  {% elif result %}
+  <p>Подсказок: {{ result.clues }}</p>
+  <p>Время расчёта: {{ result.elapsed_ms|floatformat:2 }} мс</p>
+  <p>Головоломка:</p>
+  <pre>{{ result.puzzle }}</pre>
+  <p>Решение:</p>
+  <pre>{{ result.solution }}</pre>
+  {% else %}
+  <p>Считается — страница обновится автоматически.</p>
+  {% endif %}
+</body>
+
+</html>

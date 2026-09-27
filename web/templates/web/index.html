@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ project_name }}</title>
+</head>
+
+<body>
+  <h1>{{ project_name }}</h1>
+
+  <p>Те же поля, что принимает API (<a href="/api/docs">/api/docs</a>).
+    Отправка формы создаёт задачу (как <code>POST /api/tasks</code>) и
+    переносит на страницу результата.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Отправить</button>
+  </form>
+</body>
+
+</html>
