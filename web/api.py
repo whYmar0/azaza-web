@@ -35,9 +35,23 @@ def task_status(request, task_id: int):
     }
 
 
-@api.get("/tasks/{task_id}/result")
+@api.get("/tasks/{task_id}/result", response={200: dict, 409: dict})
 def task_result(request, task_id: int):
+    """Два разных случая — два разных кода (правило курса: коды ответа
+    HTTP — часть договора с клиентом).
+
+    Раньше и "задачи нет", и "задача ещё считается" отвечали одним и тем
+    же 404 с текстом "Результат ещё не готов" — клиент не мог понять,
+    ждать ему или запрос был ошибочным. Теперь:
+    - задачи с таким id вообще нет -> 404 "задача не найдена" (ждать
+      бессмысленно, номер неверный);
+    - задача есть, но ещё не done -> 409 с текущим статусом (можно
+      повторить запрос позже);
+    - задача готова -> 200 и результат.
+    """
     task = services.get_task(task_id)
-    if task is None or task.status != "done":
-        raise Http404("Результат ещё не готов")
-    return services.get_result(task)
+    if task is None:
+        raise Http404("задача не найдена")
+    if task.status != "done":
+        return 409, {"detail": f"статус: {task.status}"}
+    return 200, services.get_result(task)
