@@ -17,7 +17,7 @@ core/ — чистая логика, без Django/БД/HTTP (как и solver.p
 
 import random
 
-from core.solver import DIGITS, EMPTY, GRID_SIZE, solve
+from core.solver import DIGITS, EMPTY, GRID_SIZE, TOO_COMPLEX, solve
 
 TARGET_CLUES = {"easy": 40, "medium": 32, "hard": 26}
 
@@ -84,8 +84,11 @@ def generate(difficulty: str = "medium", seed: int | None = None) -> tuple[str, 
             break
         removed_value = grid[idx]
         grid[idx] = EMPTY
-        # Проверка единственности после удаления: solve() с ранним выходом на втором найденном решении.
-        if solve("".join(grid)) in ("multiple", "no solution"):
+        # Проверка единственности после удаления: solve() с ранним выходом.
+        # TOO_COMPLEX — тоже «не доказано единственности»: клетку возвращаем.
+        # По замеру при генерации худший вызов solve() — 1 275 шагов из 50 000,
+        # так что на практике TOO_COMPLEX не срабатывает.
+        if solve("".join(grid)) in ("multiple", "no solution", TOO_COMPLEX):
             grid[idx] = removed_value  # не единственно — клетку возвращаем
         else:
             clues -= 1

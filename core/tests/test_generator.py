@@ -1,8 +1,7 @@
-"""Эталонный тест для генератора (методичка, чекпоинт 21.09):
-фиксированный seed + проверка единственности решения существующим solve().
+"""Тесты генератора: фиксированный seed, воспроизводимость, единственность решения.
 
-Никакой не-seeded случайности в тестах — иначе тест мог бы изредка падать
-без изменений в коде (тот самый анти-паттерн "плавающий тест")."""
+В тестах нет не-seeded случайности — иначе тест мог бы изредка падать
+без изменений в коде (анти-паттерн «плавающий тест»)."""
 
 import os
 import subprocess
@@ -16,7 +15,7 @@ SEED = 42
 
 
 def test_generate_is_reproducible_with_fixed_seed():
-    """Тот же seed -> тот же результат, каждый раз."""
+    """Один seed всегда даёт один результат."""
     puzzle_a, solution_a = generate(difficulty="medium", seed=SEED)
     puzzle_b, solution_b = generate(difficulty="medium", seed=SEED)
     assert puzzle_a == puzzle_b
@@ -24,9 +23,7 @@ def test_generate_is_reproducible_with_fixed_seed():
 
 
 def test_seed_is_reproducible_across_processes():
-    """Один процесс не ловит зависимость от хеш-рандомизации Python:
-    запускаем генератор в отдельных процессах с разным PYTHONHASHSEED —
-    результат при одном seed обязан совпасть (как после рестарта сервера)."""
+    """Один seed в разных процессах (разный PYTHONHASHSEED) даёт один результат."""
     code = "from core.generator import generate; print(generate('hard', 42)[0])"
     outputs = set()
     for hash_seed in ("1", "2", "3"):
@@ -41,8 +38,7 @@ def test_seed_is_reproducible_across_processes():
 
 
 def test_generated_puzzle_has_unique_solution():
-    """Проверка единственности — тем же solve(), что решает чужие сетки,
-    а не отдельной "доверительной" логикой внутри генератора."""
+    """Единственность проверяется тем же solve(), что решает чужие сетки."""
     puzzle, solution = generate(difficulty="medium", seed=SEED)
     assert solve(puzzle) == solution
 
@@ -54,8 +50,7 @@ def test_generated_solution_is_a_valid_full_grid():
 
 
 def test_different_seeds_give_different_puzzles():
-    """Не гарантия качества генератора, но ловит грубую ошибку вида
-    "seed вообще не используется, всегда одна и та же сетка"."""
+    """Разные seed дают разные головоломки."""
     puzzle_a, _ = generate(difficulty="medium", seed=1)
     puzzle_b, _ = generate(difficulty="medium", seed=2)
     assert puzzle_a != puzzle_b

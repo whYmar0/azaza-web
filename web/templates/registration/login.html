@@ -1,0 +1,36 @@
+{% extends "web/base.html" %}
+
+{% block title %}Sudoku Service — вход{% endblock %}
+
+{% block head %}
+<style>
+  .login { max-width: 380px; margin: 24px auto 0; background: var(--sheet); border: 1px solid var(--rule); border-top: 3px solid var(--ink); padding: 28px; }
+  .login p { margin: 0 0 16px; }
+  .login label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .login input[type="text"], .login input[type="password"] { width: 100%; font: 16px var(--sans); padding: 10px; border: 1px solid var(--rule); border-radius: 6px; }
+  .login .helptext { display: none; }
+  .login .btn { width: 100%; margin-top: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login">
+  <h1>Вход</h1>
+  <p class="muted">Задачи видны только тому, кто их создал.</p>
+
+  {% if form.errors %}
+  <ul class="errors" style="margin:0 0 16px">
+    <li>Неверное имя пользователя или пароль.</li>
+  </ul>
+  {% endif %}
+
+  <!-- Страницу отдаёт готовый LoginView Django (django.contrib.auth.urls);
+       имя файла registration/login.html важно — именно его он ищет. -->
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn">Войти</button>
+  </form>
+</div>
+{% endblock %}

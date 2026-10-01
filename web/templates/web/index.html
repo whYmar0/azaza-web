@@ -1,24 +1,202 @@
-<!DOCTYPE html>
-<html lang="ru">
+{% extends "web/base.html" %}
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project_name }}</title>
-</head>
+{% block head %}
+<style>
+  .modes { display: inline-flex; border: 1px solid var(--ink); border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+  .modes label { padding: 10px 18px; cursor: pointer; font-weight: 600; font-size: 15px; background: var(--sheet); }
+  .modes input { position: absolute; opacity: 0; pointer-events: none; }
+  .modes label:has(input:checked) { background: var(--ink); color: #fff; }
+  .modes label:has(input:focus-visible) { outline: 2px solid var(--pencil); outline-offset: -4px; }
 
-<body>
-  <h1>{{ project_name }}</h1>
+  .board.input .cell { padding: 0; }
+  .board.input input { width: 100%; height: 100%; border: 0; padding: 0; text-align: center; background: transparent; color: var(--ink); font: 700 clamp(20px, 5vw, 30px)/1 var(--serif); caret-color: transparent; }
+  .board.input input:focus { outline: none; background: var(--pencil-wash); box-shadow: inset 0 0 0 2px var(--pencil); }
+  .board.input .cell.conflict input { color: var(--err); background: var(--err-wash); }
+  .board.input.is-off { opacity: .35; pointer-events: none; }
+  .board.input.is-off input { color: transparent; }
 
-  <p>Те же поля, что принимает API (<a href="/api/docs">/api/docs</a>).
-    Отправка формы создаёт задачу (как <code>POST /api/tasks</code>) и
-    переносит на страницу результата.</p>
+  .side { display: grid; gap: 22px; }
+  .field-label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .hint { font-size: 14px; color: var(--graphite); margin: 6px 0 0; }
+  .grid-string { width: 100%; font: 13px/1.4 Consolas, "SF Mono", Menlo, monospace; padding: 9px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); color: var(--ink); }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+  .levels { display: flex; gap: 8px; }
+  .levels label { flex: 1; text-align: center; padding: 9px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); cursor: pointer; font-size: 15px; }
+  .levels input { position: absolute; opacity: 0; pointer-events: none; }
+  .levels label:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
+  .levels label:has(input:focus-visible) { outline: 2px solid var(--pencil); }
+  .seed { width: 100%; max-width: 220px; font: 16px var(--sans); padding: 9px 10px; border: 1px solid var(--rule); border-radius: 6px; }
+  [hidden] { display: none !important; }
 
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Отправить</button>
-  </form>
-</body>
+  .tasks { margin-top: 56px; }
+  .tasks table { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--rule); }
+  .tasks th, .tasks td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); font-size: 15px; }
+  .tasks th { font-weight: 600; color: var(--graphite); background: #F6F8FA; }
+  .tasks tr:last-child td { border-bottom: 0; }
+  .tasks td.num { font-variant-numeric: tabular-nums; }
+  .tasks .status { font-weight: 500; font-size: 14px; }
+  @media (max-width: 560px) { .tasks .opt { display: none; } }
+</style>
+{% endblock %}
 
-</html>
+{% block content %}
+<h1>Новая задача</h1>
+<p class="lead">Впишите сетку и получите её единственное решение — или сгенерируйте новую головоломку с гарантированно единственным решением.</p>
+
+<form method="post" id="task-form" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<ul class="errors">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+
+  <div class="modes" role="radiogroup" aria-label="Режим">
+    <label><input type="radio" name="mode" value="solve" {% if form.mode.value != "generate" %}checked{% endif %}> Решить сетку</label>
+    <label><input type="radio" name="mode" value="generate" {% if form.mode.value == "generate" %}checked{% endif %}> Сгенерировать</label>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="board input" id="board" aria-label="Сетка 9 на 9">
+        {% for c in cells %}<div class="cell{% if c.right_edge %} re{% endif %}{% if c.bottom_edge %} be{% endif %}"><input inputmode="numeric" maxlength="1" autocomplete="off" aria-label="Клетка {{ forloop.counter }}" value="{{ c.digit }}"></div>{% endfor %}
+      </div>
+      {% if form.grid.errors %}<ul class="errors">{% for e in form.grid.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      <p class="hint" id="board-hint">Цифры 1–9, стрелки — переход между клетками, Backspace — стереть. Повторы подсвечиваются сразу, но окончательно сетку проверяет сервер.</p>
+    </div>
+
+    <div class="side">
+      <div id="solve-panel">
+        <label class="field-label" for="id_grid">Строка из 81 символа</label>
+        <input class="grid-string" id="id_grid" name="grid" maxlength="81" spellcheck="false" autocomplete="off" value="{{ form.grid.value|default:'' }}" placeholder="53..7....6..195....98....">
+        <p class="hint">Пустые клетки — точки. Можно вставить строку целиком — сетка заполнится сама.</p>
+        <div class="examples" style="margin-top:12px">
+          {% for title, grid in examples %}<button type="button" class="btn-quiet" data-grid="{{ grid }}">{{ title }}</button>{% endfor %}
+          <button type="button" class="btn-quiet" data-grid="">Очистить</button>
+        </div>
+      </div>
+
+      <div id="generate-panel">
+        <span class="field-label">Сложность</span>
+        <div class="levels">
+          {% for value, title in form.fields.difficulty.choices %}
+          <label><input type="radio" name="difficulty" value="{{ value }}" {% if form.difficulty.value == value %}checked{% endif %}>{% if value == "easy" %}Лёгкая{% elif value == "medium" %}Средняя{% else %}Сложная{% endif %}</label>
+          {% endfor %}
+        </div>
+        <p class="hint">Лёгкая — 40 подсказок, средняя — 32, сложная — 26.</p>
+        <label class="field-label" for="id_seed" style="margin-top:16px">Seed <span class="muted">(необязательно)</span></label>
+        <input class="seed" type="number" id="id_seed" name="seed" min="0" max="4294967295" value="{{ form.seed.value|default_if_none:'' }}">
+        {% if form.seed.errors %}<ul class="errors">{% for e in form.seed.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        <p class="hint">Одинаковый seed — одинаковая головоломка.</p>
+      </div>
+
+      <div>
+        <button type="submit" class="btn" id="submit-btn">Запустить расчёт</button>
+        <p class="hint">Расчёт идёт в фоне: откроется страница задачи, статус обновится сам.</p>
+      </div>
+    </div>
+  </div>
+</form>
+
+<section class="tasks">
+  <h2>Мои задачи</h2>
+  {% if recent_tasks %}
+  <table>
+    <thead><tr><th>Задача</th><th>Режим</th><th>Статус</th><th class="opt">Время расчёта</th></tr></thead>
+    <tbody>
+      {% for t in recent_tasks %}
+      <tr>
+        <td><a href="{% url 'task_detail' t.id %}">№ {{ t.id }}</a> <span class="muted">{{ t.name }}</span></td>
+        <td>{% if t.kind == "generate" %}генерация{% else %}решение{% endif %}</td>
+        <td><span class="status {{ t.status }}">{{ t.get_status_display }}</span></td>
+        <td class="num opt">{% if t.status == "done" and t.result %}{{ t.result.elapsed_ms|floatformat:1 }} мс{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Задач пока нет. Впишите сетку или выберите пример — и запустите расчёт.</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Сетка из 81 клетки и строка id_grid — одно и то же значение в двух видах.
+  // На сервер уходит только строка (name="grid"); клетки без name.
+  (function () {
+    const form = document.getElementById("task-form");
+    const board = document.getElementById("board");
+    const inputs = Array.from(board.querySelectorAll("input"));
+    const str = document.getElementById("id_grid");
+    const solvePanel = document.getElementById("solve-panel");
+    const genPanel = document.getElementById("generate-panel");
+    const submit = document.getElementById("submit-btn");
+    const hint = document.getElementById("board-hint");
+    const hintSolve = hint.textContent;
+
+    function cellsToString() {
+      const s = inputs.map(i => /^[1-9]$/.test(i.value) ? i.value : ".").join("");
+      str.value = s.replace(/\.+$/, "") === "" ? "" : s;
+    }
+    function stringToCells(s) {
+      inputs.forEach((inp, k) => { const ch = s[k]; inp.value = ch && /[1-9]/.test(ch) ? ch : ""; });
+    }
+    function markConflicts() {
+      const v = inputs.map(i => i.value);
+      const bad = new Set();
+      for (let a = 0; a < 81; a++) {
+        if (!v[a]) continue;
+        for (let b = a + 1; b < 81; b++) {
+          if (v[a] !== v[b]) continue;
+          const ra = Math.floor(a / 9), ca = a % 9, rb = Math.floor(b / 9), cb = b % 9;
+          const sameBox = Math.floor(ra / 3) === Math.floor(rb / 3) && Math.floor(ca / 3) === Math.floor(cb / 3);
+          if (ra === rb || ca === cb || sameBox) { bad.add(a); bad.add(b); }
+        }
+      }
+      inputs.forEach((inp, k) => inp.parentElement.classList.toggle("conflict", bad.has(k)));
+    }
+    function sync() { cellsToString(); markConflicts(); }
+
+    inputs.forEach((inp, k) => {
+      inp.addEventListener("keydown", e => {
+        const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 };
+        if (e.key in moves) {
+          e.preventDefault();
+          const n = k + moves[e.key];
+          if (n >= 0 && n < 81) inputs[n].focus();
+        } else if (/^[1-9]$/.test(e.key)) {
+          e.preventDefault(); inp.value = e.key; sync();
+          if (k < 80) inputs[k + 1].focus();
+        } else if (e.key === "Backspace" || e.key === "Delete" || e.key === "0" || e.key === ".") {
+          e.preventDefault(); inp.value = ""; sync();
+          if (e.key === "Backspace" && k > 0) inputs[k - 1].focus();
+        } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+        }
+      });
+      inp.addEventListener("input", sync);
+      inp.addEventListener("paste", e => {
+        const text = (e.clipboardData.getData("text") || "").replace(/\s/g, "");
+        if (text.length > 1) { e.preventDefault(); str.value = text.slice(0, 81); stringToCells(str.value); markConflicts(); }
+      });
+    });
+    str.addEventListener("input", () => { stringToCells(str.value); markConflicts(); });
+    document.querySelectorAll("[data-grid]").forEach(btn => btn.addEventListener("click", () => {
+      str.value = btn.dataset.grid; stringToCells(str.value); markConflicts();
+    }));
+
+    function applyMode() {
+      const mode = form.querySelector('input[name="mode"]:checked').value;
+      const solve = mode === "solve";
+      solvePanel.hidden = !solve;
+      genPanel.hidden = solve;
+      board.classList.toggle("is-off", !solve);
+      str.disabled = !solve;           // в режиме генерации сетку не отправляем
+      inputs.forEach(i => i.disabled = !solve);
+      submit.textContent = solve ? "Решить" : "Сгенерировать";
+      hint.textContent = solve ? hintSolve
+        : "Сетку построит сервер: заполнит её целиком, потом уберёт клетки по одной — пока решение остаётся единственным.";
+    }
+    form.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", applyMode));
+    applyMode();
+    markConflicts();
+  })();
+</script>
+{% endblock %}

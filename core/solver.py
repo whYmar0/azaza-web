@@ -1,14 +1,29 @@
 """Решатель судоку.
 
 Формат сетки — строка из 81 символа: '1'-'9' и '.' для пустой клетки
-(общепринятый текстовый формат судоку). core/ не импортирует Django,
-не ходит в БД и HTTP — только чистая логика поиска решения.
+(общепринятый текстовый формат судоку — тот же, что на слайде курса и в
+Wikipedia). core/ не импортирует Django, не ходит в БД и HTTP — здесь
+только чистая логика поиска решения.
 """
 
 GRID_SIZE = 9
 BOX_SIZE = 3
 EMPTY = "."
 DIGITS = set("123456789")
+
+# Предел шагов перебора. limit=2 ниже — число РЕШЕНИЙ, а не шагов.
+# На сетке без решения перебор идёт без конца. Предел выбран по замеру:
+#   классическая сетка (Wikipedia)     —     52 шага
+#   сетка Инкалы (2012)                — 18 936 шагов, ~1.4 с
+#   генерация hard, худший solve()     —  1 275 шагов
+#   сетка Норвига без решения          — >2 000 000 шагов, не закончила
+# 50 000 — в 2.6 раза больше Инкалы; на сетке без решения ~3 с. Шаг = один вызов backtrack().
+MAX_STEPS = 50_000
+TOO_COMPLEX = "too complex"
+
+
+class StepLimitExceeded(Exception):
+    """Перебор превысил MAX_STEPS — сетка слишком сложная или без решения."""
 
 
 def _candidates(grid: list[str], idx: int) -> set[str]:
@@ -42,20 +57,32 @@ def _find_mrv_cell(grid: list[str]) -> tuple[int, set[str]] | None:
     return best_idx, best_candidates
 
 
-def _find_solutions(grid: list[str], limit: int = 2) -> list[str]:
+def _find_solutions(
+    grid: list[str], limit: int = 2, max_steps: int = MAX_STEPS
+) -> list[str]:
     """Найти до `limit` решений — не больше, чем нужно для проверки
-    единственности (не решаем до конца, если решений уже 2)."""
+    единственности (не решаем до конца, если решений уже 2).
+
+    Больше `max_steps` шагов -> StepLimitExceeded."""
     found: list[str] = []
+    steps = 0
 
     def backtrack() -> None:
+        nonlocal steps
         if len(found) >= limit:
             return
+        steps += 1
+        if steps > max_steps:
+            raise StepLimitExceeded(f"превышен предел перебора: {max_steps} шагов")
         cell = _find_mrv_cell(grid)
         if cell is None:
             found.append("".join(grid))
             return
         idx, candidates = cell
-        for value in candidates:
+        # sorted(): порядок обхода set зависит от PYTHONHASHSEED (тот же баг,
+        # что был в генераторе). Без сортировки число шагов, а значит и
+        # срабатывание предела, менялось бы от запуска к запуску.
+        for value in sorted(candidates):
             if len(found) >= limit:
                 return
             grid[idx] = value
@@ -71,14 +98,19 @@ def solve(grid: str) -> str:
 
     Возвращает решение (81 символ), если оно единственное. Если решений
     несколько (в том числе пустая или сильно недоопределённая сетка) —
-    возвращает "multiple". Если решений нет вовсе — "no solution" (такого
-    на входе быть не должно: некорректные сетки отклоняются на уровне
-    core/schemas.py ДО вызова этой функции).
+    возвращает "multiple". Если решений нет вовсе — "no solution".
+
+    Если перебор не уложился в MAX_STEPS шагов — «тоо complex» (TOO_COMPLEX).
+    Схема (core/schemas.py) отсекает сетки с повторами, но сетку без повторов
+    и без решения заранее не распознать — её можно только остановить по пределу.
     """
     if len(grid) != GRID_SIZE * GRID_SIZE:
         raise ValueError("Сетка должна содержать ровно 81 символ")
 
-    solutions = _find_solutions(list(grid), limit=2)
+    try:
+        solutions = _find_solutions(list(grid), limit=2)
+    except StepLimitExceeded:
+        return TOO_COMPLEX
 
     if len(solutions) == 1:
         return solutions[0]

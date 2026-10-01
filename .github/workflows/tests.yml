@@ -1,0 +1,17 @@
+name: tests
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Пара 14: без ключа и без DEBUG сервер (и pytest) не стартует —
+    # «задайте DJANGO_SECRET_KEY». Роботу нужен режим разработки, как в .env.example.
+    env:
+      DJANGO_DEBUG: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt  # pytest и pytest-django — здесь
+      - run: pytest -q

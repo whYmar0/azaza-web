@@ -1,4 +1,6 @@
-"""Путь через сайт (чекпоинт 21.09): форма -> расчёт -> страница результата.
+"""Путь через сайт: форма → расчёт → страница результата.
+
+Аутентифицированные запросы идут через фикстуру auth_client (tests/conftest.py).
 
 transaction=True — расчёт идёт в отдельном потоке (web/services.py), и поток
 должен видеть закоммиченную задачу; в обычном django_db-тесте всё внутри
@@ -25,8 +27,8 @@ def _wait_until_finished(task_id: int, timeout: float = 10.0) -> Task:
 
 
 @pytest.mark.django_db(transaction=True)
-def test_form_solve_redirects_and_shows_known_solution(client):
-    response = client.post(
+def test_form_solve_redirects_and_shows_known_solution(auth_client):
+    response = auth_client.post(
         "/", {"mode": "solve", "grid": PUZZLE, "difficulty": "medium", "seed": ""}
     )
     assert response.status_code == 302
@@ -37,13 +39,13 @@ def test_form_solve_redirects_and_shows_known_solution(client):
     assert task.result.solution == SOLUTION
     assert task.result.elapsed_ms > 0  # настоящее время, не заглушка 0.0
 
-    page = client.get(response.url)
+    page = auth_client.get(response.url)
     assert SOLUTION in page.content.decode()
 
 
 @pytest.mark.django_db(transaction=True)
-def test_form_generate_produces_result(client):
-    response = client.post(
+def test_form_generate_produces_result(auth_client):
+    response = auth_client.post(
         "/", {"mode": "generate", "grid": "", "difficulty": "easy", "seed": "42"}
     )
     assert response.status_code == 302
@@ -53,11 +55,20 @@ def test_form_generate_produces_result(client):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_form_rejects_duplicate_digit_without_creating_task(client):
+def test_form_rejects_duplicate_digit_without_creating_task(auth_client):
     bad = "55" + PUZZLE[2:]
-    response = client.post(
+    response = auth_client.post(
         "/", {"mode": "solve", "grid": bad, "difficulty": "medium", "seed": ""}
     )
     assert response.status_code == 200  # форма показана снова, не 500
     assert "Повтор цифры 5" in response.content.decode()
     assert Task.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_anonymous_is_sent_to_login(client):
+    """Аноним перенаправляется на страницу входа (нет доступа к форме)."""
+    response = client.get("/")
+    assert response.status_code == 302
+    assert response.url == "/accounts/login/?next=/"
+    assert client.get(response.url).status_code == 200  # страница входа есть

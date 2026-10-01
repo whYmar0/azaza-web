@@ -1,2 +1,7 @@
-pytest>=8.0
-pytest-django>=4.8
+# Для разработки и тестов (ставится вместе с requirements.txt, см. README).
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+pytest==9.1.1
+pytest-django==4.14.0

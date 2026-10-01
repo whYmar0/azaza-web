@@ -5,7 +5,7 @@
 строках/столбцах/блоках — наше дополнение поверх
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 GRID_LENGTH = 81
 GRID_SIZE = 9
@@ -23,7 +23,16 @@ class SudokuParams(BaseModel):
     mode: str = Field(pattern=r"^(solve|generate)$")
     grid: str | None = Field(default=None, min_length=GRID_LENGTH, max_length=GRID_LENGTH)
     difficulty: str = Field(default="medium", pattern=r"^(easy|medium|hard)$")
-    seed: int | None = None  # та же сетка при том же seed
+    # seed воспроизводит одну и ту же сетку. Граница: неотрицательное
+    # 32-битное число (без верхней границы вход не оставляем).
+    seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
+
+    @model_validator(mode="after")
+    def solve_needs_grid(self) -> "SudokuParams":
+        """mode=solve без сетки — 422 сразу, задача не создаётся."""
+        if self.mode == "solve" and self.grid is None:
+            raise ValueError("grid: для mode=solve нужна сетка из 81 символа")
+        return self
 
     @field_validator("grid")
     @classmethod

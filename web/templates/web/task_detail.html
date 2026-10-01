@@ -1,36 +1,73 @@
-<!DOCTYPE html>
-<html lang="ru">
+{% extends "web/base.html" %}
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project_name }} — задача #{{ task.id }}</title>
-  {% if task.status == "queued" or task.status == "running" %}
-  <!-- Расчёт идёт в фоне (threading, см. ADR-002); страница сама
-       перезагрузится через секунду, пока задача не завершится. -->
-  <meta http-equiv="refresh" content="1">
-  {% endif %}
-</head>
+{% block title %}{{ project_name }} — задача №{{ task.id }}{% endblock %}
 
-<body>
-  <h1>{{ project_name }}</h1>
-  <p><a href="{% url 'index' %}">&larr; новая задача</a></p>
+{% block head %}
+{% if in_progress %}
+<!-- Расчёт идёт в фоне (threading, см. ADR-002); страница сама
+     перезагрузится через секунду, пока задача не завершится. -->
+<meta http-equiv="refresh" content="1">
+{% endif %}
+<style>
+  .facts { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .facts dt { color: var(--graphite); }
+  .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .status-line { font-size: 20px; margin: 4px 0 20px; }
+  .note { margin: 18px 0 0; padding: 14px 16px; background: var(--sheet); border-left: 3px solid var(--rule); }
+  .note.error { border-left-color: var(--err); background: var(--err-wash); color: var(--err); }
+  .strings { margin-top: 28px; display: grid; gap: 14px; }
+  .strings p { margin: 0 0 4px; font-weight: 600; font-size: 15px; }
+  .strings pre { margin: 0; padding: 10px 12px; background: var(--sheet); border: 1px solid var(--rule); font: 13px/1.4 Consolas, "SF Mono", Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
+  .board.waiting { background: repeating-linear-gradient(135deg, #fff 0 10px, #F4F6F9 10px 20px); }
+  .actions { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .actions a { text-decoration: none; }
+</style>
+{% endblock %}
 
-  <h2>Задача #{{ task.id }} — {{ task.name }}</h2>
-  <p>Статус: <strong>{{ task.get_status_display }}</strong></p>
+{% block content %}
+<p style="margin:0"><a href="{% url 'index' %}">Новая задача</a></p>
+<h1>Задача №{{ task.id }}</h1>
+<p class="lead">{{ task.name }}</p>
 
-  {% if task.status == "error" %}
-  <p style="color: darkred;">Ошибка: {{ task.error }}</p>
-  {% elif result %}
-  <p>Подсказок: {{ result.clues }}</p>
-  <p>Время расчёта: {{ result.elapsed_ms|floatformat:2 }} мс</p>
-  <p>Головоломка:</p>
-  <pre>{{ result.puzzle }}</pre>
-  <p>Решение:</p>
-  <pre>{{ result.solution }}</pre>
-  {% else %}
-  <p>Считается — страница обновится автоматически.</p>
-  {% endif %}
-</body>
+<div class="layout">
+  <div>
+    <div class="board{% if in_progress %} waiting{% endif %}" aria-label="Сетка 9 на 9">
+      {% for c in cells %}<div class="cell{% if c.right_edge %} re{% endif %}{% if c.bottom_edge %} be{% endif %}{% if c.given %} given{% elif c.solved %} solved{% endif %}"{% if c.solved %} style="--o: {{ c.order }}"{% endif %}>{{ c.digit }}</div>{% endfor %}
+    </div>
+    <div class="legend">
+      <span><b class="g">5</b>подсказка</span>
+      {% if result %}<span><b class="s">5</b>найдено решателем</span>{% endif %}
+    </div>
+  </div>
 
-</html>
+  <div>
+    <p class="status-line"><span class="status {{ task.status }}">{% if in_progress %}{% if task.kind == "generate" %}Генерируется…{% else %}Считается…{% endif %}{% else %}{{ task.get_status_display }}{% endif %}</span></p>
+
+    <dl class="facts">
+      <dt>Режим</dt><dd>{% if task.kind == "generate" %}генерация{% if task.params.difficulty %}, {% if task.params.difficulty == "easy" %}лёгкая{% elif task.params.difficulty == "hard" %}сложная{% else %}средняя{% endif %}{% endif %}{% if task.params.seed is not None %}, seed {{ task.params.seed }}{% endif %}{% else %}решение готовой сетки{% endif %}</dd>
+      {% if result %}
+      <dt>Подсказок</dt><dd>{{ result.clues }} из 81</dd>
+      <dt>Время расчёта</dt><dd>{{ result.elapsed_ms|floatformat:2 }} мс</dd>
+      {% endif %}
+      <dt>Создана</dt><dd>{{ task.created_at|date:"d.m.Y H:i:s" }}</dd>
+    </dl>
+
+    {% if task.status == "error" %}
+    <p class="note error">Ошибка: {{ task.error }}</p>
+    {% elif in_progress %}
+    <p class="note">Расчёт идёт в фоне — страница обновится сама. Самая сложная из известных сеток решается около двух секунд.</p>
+    {% endif %}
+
+    {% if result %}
+    <div class="strings">
+      <div><p>Головоломка</p><pre>{{ result.puzzle }}</pre></div>
+      <div><p>Решение</p><pre>{{ result.solution }}</pre></div>
+    </div>
+    {% endif %}
+
+    <div class="actions">
+      <a class="btn" href="{% url 'index' %}">Новая задача</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

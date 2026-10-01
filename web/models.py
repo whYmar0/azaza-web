@@ -1,6 +1,7 @@
 """Django ORM живёт только здесь и в migrations/ — core/ про БД не знает,
 как того требует AGENTS.md. Структура соответствует docs/ER.png."""
 
+from django.conf import settings
 from django.db import models
 
 
@@ -27,6 +28,17 @@ class Task(models.Model):
     error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Чья это задача. Встроенная таблица пользователей Django.
+    # CASCADE — удалили пользователя, удалились его задачи.
+    # null=True — задачи, созданные до этого поля, остаются без владельца,
+    # и миграция на существующей базе не падает (см. docs/ADR-003.md).
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="tasks",
+    )
 
     class Meta:
         ordering = ["-created_at"]
