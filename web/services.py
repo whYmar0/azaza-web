@@ -27,11 +27,11 @@ def create_task(user, name: str, params: SudokuParams) -> Task:
     )
     # Обычно — фоновый поток. В тестах расчёт идёт синхронно (RUN_IN_THREAD=False):
     # тестовая база SQLite одна на тест и поток, и поток иногда получал
-    # «database table is locked» и умирал, задача оставалась queued.
+    # «database table is locked» и умирал — задача оставалась queued.
     if getattr(settings, "RUN_IN_THREAD", True):
         threading.Thread(target=_run, args=(task.id, params), daemon=True).start()
     else:
-        _run(task.id, params)  # синхронно (для тестов)
+        _run(task.id, params)  # сразу, в том же потоке
     return task
 
 
@@ -52,7 +52,8 @@ def _run(task_id: int, params: SudokuParams) -> None:
 
 
 def _run_solve(task: Task, params: SudokuParams) -> None:
-    # Вторая линия защиты: схема отсекает это раньше (422 до создания задачи).
+    # Вторая линия защиты на случай вызова в обход схемы;
+    # в обычном пути (API/сайт) до неё не доходит.
     if not params.grid:
         raise ValueError("Для mode=solve нужна сетка (grid)")
 

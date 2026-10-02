@@ -35,5 +35,6 @@ SOLUTION = (
 
 
 def test_solver_matches_known_answer():
-    """Ответ известен из открытого источника (The Daily Telegraph / Slashdot)."""
+    """Ответ известен из открытого источника (см. докстринг модуля выше),
+    не из нашего собственного кода — иначе проверка была бы бессмысленной."""
     assert solve(PUZZLE) == SOLUTION

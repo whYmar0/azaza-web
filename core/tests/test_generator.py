@@ -23,7 +23,7 @@ def test_generate_is_reproducible_with_fixed_seed():
 
 
 def test_seed_is_reproducible_across_processes():
-    """Один seed в разных процессах (разный PYTHONHASHSEED) даёт один результат."""
+    """Один seed в разных процессах (PYTHONHASHSEED) даёт один результат."""
     code = "from core.generator import generate; print(generate('hard', 42)[0])"
     outputs = set()
     for hash_seed in ("1", "2", "3"):

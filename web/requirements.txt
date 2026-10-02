@@ -1,0 +1,12 @@
+# Пара 14: версии закреплены (==) — снято pip freeze в чистом .venv 01.10;
+# pip-audit: известных уязвимостей не найдено. Обновлять: поднять версию -> pytest -> коммит.
+annotated-types==0.8.0
+asgiref==3.12.1
+Django==5.2.17
+django-ninja==1.7.1
+pydantic==2.13.5
+pydantic_core==2.46.5
+python-dotenv==1.2.4
+sqlparse==0.6.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
